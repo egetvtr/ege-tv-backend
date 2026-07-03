@@ -14,11 +14,9 @@ FROM node:20-alpine AS runner
 WORKDIR /app
 
 COPY package*.json ./
-RUN npm ci --omit=dev
-
-# Prisma client'ı runtime için üret
+# prisma schema.prisma postinstall için npm ci'dan önce kopyalanmalı
 COPY prisma ./prisma
-RUN npx prisma generate
+RUN npm ci --omit=dev
 
 # Derlenmiş kodu builder'dan kopyala
 COPY --from=builder /app/dist ./dist
