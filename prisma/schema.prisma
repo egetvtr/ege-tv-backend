@@ -1,0 +1,136 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
+  directUrl = env("DIRECT_URL")
+}
+
+// ================= ENUMS =================
+
+enum NewsSource {
+  MANUAL // admin panelden elle girildi
+  AUTO   // dış kaynaktan çekilip AI ile yeniden yazıldı
+}
+
+enum NewsStatus {
+  DRAFT       // taslak / AI yeniden yazımı yapıldı, onay bekliyor
+  PENDING     // yayın onayına gönderildi
+  PUBLISHED   // yayında
+  REJECTED    // reddedildi
+  ARCHIVED    // arşivlendi
+}
+
+enum VideoStatus {
+  ACTIVE
+  HIDDEN
+}
+
+enum AdminRole {
+  SUPER_ADMIN
+  EDITOR
+  VIEWER
+}
+
+// ================= MODELS =================
+
+model AdminUser {
+  id        String    @id @default(uuid())
+  email     String    @unique
+  password  String
+  name      String
+  role      AdminRole @default(EDITOR)
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+
+  newsAuthored News[] @relation("NewsAuthor")
+
+  @@map("admin_users")
+}
+
+model Category {
+  id        String   @id @default(uuid())
+  name      String
+  slug      String   @unique
+  createdAt DateTime @default(now())
+
+  news   News[]
+  videos Video[]
+
+  @@map("categories")
+}
+
+model Video {
+  id            String      @id @default(uuid())
+  youtubeId     String      @unique // YouTube video ID
+  title         String
+  description   String?     @db.Text
+  thumbnailUrl  String?
+  channelId     String
+  duration      String? // ISO 8601 (PT4M13S)
+  viewCount     Int?        @default(0)
+  status        VideoStatus @default(ACTIVE)
+  publishedAt   DateTime // YouTube'daki yayın tarihi
+  syncedAt      DateTime    @default(now())
+  categoryId    String?
+  category      Category?   @relation(fields: [categoryId], references: [id])
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([publishedAt])
+  @@index([status])
+  @@map("videos")
+}
+
+model News {
+  id             String     @id @default(uuid())
+  title          String
+  slug           String     @unique
+  summary        String?    @db.Text
+  content        String     @db.Text
+  coverImageUrl  String?
+  source         NewsSource @default(MANUAL)
+  sourceUrl      String? // AUTO kaynağı ise orijinal link
+  sourceName     String? // örn. "AA", "Anadolu Ajansı"
+  aiRewritten    Boolean    @default(false)
+  status         NewsStatus @default(DRAFT)
+
+  categoryId String?
+  category   Category? @relation(fields: [categoryId], references: [id])
+
+  authorId String?
+  author   AdminUser? @relation("NewsAuthor", fields: [authorId], references: [id])
+
+  publishedAt DateTime?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  @@index([status])
+  @@index([publishedAt])
+  @@map("news")
+}
+
+model NewsFeedSource {
+  id        String   @id @default(uuid())
+  name      String
+  rssUrl    String   @unique
+  active    Boolean  @default(true)
+  lastFetch DateTime?
+  createdAt DateTime @default(now())
+
+  @@map("news_feed_sources")
+}
+
+model SyncLog {
+  id        String   @id @default(uuid())
+  type      String // "youtube" | "news_rss"
+  status    String // "success" | "failed"
+  message   String?  @db.Text
+  itemCount Int      @default(0)
+  createdAt DateTime @default(now())
+
+  @@map("sync_logs")
+}
